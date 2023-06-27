@@ -50,6 +50,7 @@ typedef struct{
     int8_t reverse;
     uint8_t have_calculated;
     uint8_t have_init;
+    uint8_t have_send;
     float P[8];
     float T[8];
     float V[8];
@@ -57,6 +58,13 @@ typedef struct{
     float k_vel;
     float k_pos;
 }Curve_Data;
+
+typedef union{
+    uint32_t t_data;
+    float s_data
+}Flash_Data_u;
+
+extern Flash_Data_u Flash_Data;
 
 extern Curve_Data Go_Ctrl_Data[14];
 extern Go_Status Go_State[14];
@@ -70,3 +78,6 @@ void AS_Curve_Init(Curve_Data *AS_Curve_Data, float J_a, float J_d, float A_a, f
 void Go_Motor_Curve_Control(uint8_t id);
 void Go_Vel_PID_Control(uint8_t ID);
 void Go_Pos_PID_Control(uint8_t ID);
+void Motor_Ctrl(uint8_t id);
+void Go_Update_data(uint8_t id);
+void motorOn(uint8_t id);

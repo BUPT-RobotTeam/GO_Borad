@@ -41,7 +41,10 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
+extern int time_1ms_cnt;
+extern int idle_time;
 
+#define FLASH_Param ((uint32_t *)(0x08020000))
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -59,6 +62,8 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define LED1_Pin GPIO_PIN_10
 #define LED1_GPIO_Port GPIOC
+#define LED2_Pin GPIO_PIN_11
+#define LED2_GPIO_Port GPIOC
 
 /* USER CODE BEGIN Private defines */
 

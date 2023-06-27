@@ -5,6 +5,7 @@
 #include "crc_ccitt.h"
 #include "pid.h"
 #include "Go_Driver.h"
+#include "usart_cmd.h"
 
 #define PI 3.1415926535f
 
@@ -19,6 +20,8 @@ union Body_Parameters{
     uint8_t data[12];
     Body_Data parameters;
 }Body_Parameters_u;
+
+Flash_Data_u Flash_Data;
 
 union Rev_Parameters{
     Go_Rev_Data rx_data;
@@ -102,6 +105,8 @@ void Go_Control_Send()
 
     // dma send data
     usart3_tx_dma_enable(data, 17);
+//    HAL_UART_Transmit_DMA(&huart3, data, 17);
+    Go_Ctrl_Data[Go_Tx_Data.ID].have_send = 1;
 }
 
 void Go_Motor_Torque_Control(uint8_t ID, float Torque)
@@ -210,8 +215,20 @@ void USART3_Rx_Init() {
     USART3_Receive_init(rx_data_box[0], rx_data_box[1], SBUS_RX_BUF_NUM);
 }
 
+void Motor_Ctrl(uint8_t id){
+    Go_Ctrl_Data[id].have_send = 0;
+    if (Go_State[id].State == PosControl) Go_Motor_Position_Control(id, Go_Ctrl_Data[id].des_pos, Go_Ctrl_Data[id].k_pos);
+    else if (Go_State[id].State == VelControl) Go_Motor_Speed_Control(id, Go_Ctrl_Data[id].des_vel, Go_Ctrl_Data[id].k_vel);
+    else if (Go_State[id].State == AsCurveControl) Go_Motor_Curve_Control(id);
+    else if (Go_State[id].State == PIDVelControl) Go_Vel_PID_Control(id);
+    else if (Go_State[id].State == PIDPosControl) Go_Pos_PID_Control(id);
+}
+
 void Received_Data_Dealer(const uint8_t *sbus_buf)
 {
+    interrupted = 0;
+    HAL_GPIO_WritePin(LED1_GPIO_Port,LED1_Pin,GPIO_PIN_RESET);
+    idle_time = 0;
     uint8_t id = sbus_buf[2]<<4;
     id = id >> 4;
     for (int i=0,j=3;i<8;i++,j++) Rev_Parameters_u.data[i] = sbus_buf[j];
@@ -226,22 +243,18 @@ void Received_Data_Dealer(const uint8_t *sbus_buf)
         Go_State[id].have_init = 1;
         return;
     }
-    if (Go_State[id].State == PosControl) Go_Motor_Position_Control(id, Go_Ctrl_Data[id].des_pos, Go_Ctrl_Data[id].k_pos);
-    else if (Go_State[id].State == VelControl) Go_Motor_Speed_Control(id, Go_Ctrl_Data[id].des_vel, Go_Ctrl_Data[id].k_vel);
-    else if (Go_State[id].State == AsCurveControl) Go_Motor_Curve_Control(id);
-    else if (Go_State[id].State == PIDVelControl) Go_Vel_PID_Control(id);
-    else if (Go_State[id].State == PIDPosControl) Go_Pos_PID_Control(id);
+    Motor_Ctrl(id);
+//    if (Go_State[id].State == AsCurveControl) Go_Motor_Curve_Control(id);
 }
 
 void USART3_IRQHandler(void) {
+    idle_time = 0;
     if (huart3.Instance->SR & UART_FLAG_RXNE)//接收到数据
     {
         __HAL_UART_CLEAR_PEFLAG(&huart3);
 
     } else if (USART3->SR & UART_FLAG_IDLE) {
         static uint16_t this_time_rx_len = 0;
-
-
         __HAL_UART_CLEAR_PEFLAG(&huart3);
         if ((hdma_usart3_rx.Instance->CR & DMA_SxCR_CT) == RESET) {
             /* Current memory buffer used is Memory 0 */
@@ -295,6 +308,8 @@ void USART3_IRQHandler(void) {
                 Received_Data_Dealer(rx_data_box[1]);
             }
         }
+    }else{
+        HAL_UART_IRQHandler(&huart3);
     }
 }
 
@@ -312,6 +327,7 @@ void AS_Curve_Init(Curve_Data *AS_Curve_Data, float J_a, float J_d, float A_a, f
 void AS_Curve_Related_Data_Cal(Curve_Data *AS_Curve_Data, float start_angle)
 {
     float Tar_Pos = AS_Curve_Data->des_pos - start_angle;
+    float Vm = AS_Curve_Data->V_m;
 
     if (Tar_Pos < 0){
         AS_Curve_Data->reverse = -1;
@@ -323,50 +339,50 @@ void AS_Curve_Related_Data_Cal(Curve_Data *AS_Curve_Data, float start_angle)
 //    uprintf("start_angle is: %f\r\n",start_angle);
 //    uprintf("reverse is %d\r\n",AS_Curve_Data->reverse);
 
-    if (AS_Curve_Data->V_m*AS_Curve_Data->J_a >= AS_Curve_Data->A_a*AS_Curve_Data->A_a){
+    if (Vm*AS_Curve_Data->J_a >= AS_Curve_Data->A_a*AS_Curve_Data->A_a){
         AS_Curve_Data->T[1] = AS_Curve_Data->A_a/AS_Curve_Data->J_a;
-        AS_Curve_Data->T[2] = (AS_Curve_Data->V_m/AS_Curve_Data->A_a)-AS_Curve_Data->T[1];
+        AS_Curve_Data->T[2] = (Vm/AS_Curve_Data->A_a)-AS_Curve_Data->T[1];
     }else{
-        AS_Curve_Data->T[1] = sqrtf(AS_Curve_Data->V_m / AS_Curve_Data->J_a);
+        AS_Curve_Data->T[1] = sqrtf(Vm / AS_Curve_Data->J_a);
         AS_Curve_Data->T[2] = 0;
     }
     AS_Curve_Data->T[3] = AS_Curve_Data->T[1];
-    if (AS_Curve_Data->V_m*AS_Curve_Data->J_d >= AS_Curve_Data->A_d*AS_Curve_Data->A_d){
+    if (Vm*AS_Curve_Data->J_d >= AS_Curve_Data->A_d*AS_Curve_Data->A_d){
         AS_Curve_Data->T[5] = AS_Curve_Data->A_d / AS_Curve_Data->J_d;
-        AS_Curve_Data->T[6] = (AS_Curve_Data->V_m / AS_Curve_Data->A_d) - (AS_Curve_Data->A_d / AS_Curve_Data->J_d);
+        AS_Curve_Data->T[6] = (Vm / AS_Curve_Data->A_d) - (AS_Curve_Data->A_d / AS_Curve_Data->J_d);
     }else{
         AS_Curve_Data->T[6] = 0;
-        AS_Curve_Data->T[5] = sqrtf(AS_Curve_Data->V_m / AS_Curve_Data->J_d);
+        AS_Curve_Data->T[5] = sqrtf(Vm / AS_Curve_Data->J_d);
     }
     AS_Curve_Data->T[7] = AS_Curve_Data->T[5];
-    AS_Curve_Data->T[4] = (Tar_Pos / AS_Curve_Data->V_m) - (0.5f * AS_Curve_Data->T[2] + AS_Curve_Data->T[1] + AS_Curve_Data->T[5] + 0.5f * AS_Curve_Data->T[6]);
+    AS_Curve_Data->T[4] = (Tar_Pos / Vm) - (0.5f * AS_Curve_Data->T[2] + AS_Curve_Data->T[1] + AS_Curve_Data->T[5] + 0.5f * AS_Curve_Data->T[6]);
 
     if (AS_Curve_Data->T[4] < 0){
         float L,R;
-        L = 0, R = AS_Curve_Data->V_m;
+        L = 0, R = Vm;
         for (;fabsf(AS_Curve_Data->T[4])>=0.001f;){
-            AS_Curve_Data->V_m = (L + R)/2.0f;
-            if (AS_Curve_Data->V_m*AS_Curve_Data->J_a >= AS_Curve_Data->A_a*AS_Curve_Data->A_a){
+            Vm = (L + R)/2.0f;
+            if (Vm*AS_Curve_Data->J_a >= AS_Curve_Data->A_a*AS_Curve_Data->A_a){
                 AS_Curve_Data->T[1] = AS_Curve_Data->A_a/AS_Curve_Data->J_a;
-                AS_Curve_Data->T[2] = (AS_Curve_Data->V_m/AS_Curve_Data->A_a)-AS_Curve_Data->T[1];
+                AS_Curve_Data->T[2] = (Vm/AS_Curve_Data->A_a)-AS_Curve_Data->T[1];
             }else{
-                AS_Curve_Data->T[1] = sqrtf(AS_Curve_Data->V_m / AS_Curve_Data->J_a);
+                AS_Curve_Data->T[1] = sqrtf(Vm / AS_Curve_Data->J_a);
                 AS_Curve_Data->T[2] = 0;
             }
             AS_Curve_Data->T[3] = AS_Curve_Data->T[1];
-            if (AS_Curve_Data->V_m*AS_Curve_Data->J_d >= AS_Curve_Data->A_d*AS_Curve_Data->A_d){
+            if (Vm*AS_Curve_Data->J_d >= AS_Curve_Data->A_d*AS_Curve_Data->A_d){
                 AS_Curve_Data->T[5] = AS_Curve_Data->A_d / AS_Curve_Data->J_d;
-                AS_Curve_Data->T[6] = (AS_Curve_Data->V_m / AS_Curve_Data->A_d) - (AS_Curve_Data->A_d / AS_Curve_Data->J_d);
+                AS_Curve_Data->T[6] = (Vm / AS_Curve_Data->A_d) - (AS_Curve_Data->A_d / AS_Curve_Data->J_d);
             }else{
                 AS_Curve_Data->T[6] = 0;
-                AS_Curve_Data->T[5] = sqrtf(AS_Curve_Data->V_m / AS_Curve_Data->J_d);
+                AS_Curve_Data->T[5] = sqrtf(Vm / AS_Curve_Data->J_d);
             }
             AS_Curve_Data->T[7] = AS_Curve_Data->T[5];
-            AS_Curve_Data->T[4] = (Tar_Pos / AS_Curve_Data->V_m) - (0.5f * AS_Curve_Data->T[2] + AS_Curve_Data->T[1] + AS_Curve_Data->T[5] + 0.5f * AS_Curve_Data->T[6]);
+            AS_Curve_Data->T[4] = (Tar_Pos / Vm) - (0.5f * AS_Curve_Data->T[2] + AS_Curve_Data->T[1] + AS_Curve_Data->T[5] + 0.5f * AS_Curve_Data->T[6]);
             if (AS_Curve_Data->T[4] > 0){
-                L = AS_Curve_Data->V_m;
+                L = Vm;
             }else{
-                R = AS_Curve_Data->V_m;
+                R = Vm;
             }
         }
     }
@@ -400,10 +416,11 @@ float Find_Triple_root(float a, float b, float c, float d, float l, float r)
 {
     float ans = (l+r)/2.0f;
     int cnt = 0;
-    while (fabsf(a*powf(ans,3.0f)+b*powf(ans,2.0f)+c*ans+d) > 0.001f){
+    while (fabsf(a*powf(ans,3.0f)+b*powf(ans,2.0f)+c*ans+d) > 0.01f){
         if (a*powf(ans,3.0f)+b*powf(ans,2.0f)+c*ans+d<0) l = ans;
         else r = ans;
         ans = (l+r)/2.0f;
+        if (fabsf(l-r)<=0.0001f) return ans;
     }
 //    uprintf("ans is %f\r\n",ans);
     // float _ans = ans*cosf()
@@ -473,7 +490,7 @@ float S_Curve_cal(Curve_Data *AS_Curve_Data, int id)
         T[5] = T[5] - T[4];
         float t = Find_Triple_root((1.0f/6.0f)*J_d,-0.5f*J_d*T[5],V[4]-0.5f*T[5]*T[5]*J_d-J_d*T[5]*T[6],-delta_pos,0,T[7]-T[6]);
         Next_Speed = V[4]+J_d*(0.5f*t*t-T[5]*t-0.5f*T[5]*T[5]-T[5]*T[6]);
-        if (fabsf(Now_Pos-P[7])<=0.000001f){
+        if (fabsf(Now_Pos-P[7])<=0.001f){
             Next_Speed = 0;
             Go_State[id].State = PosControl;
         }
@@ -498,7 +515,47 @@ void Go_Motor_Curve_Control(uint8_t id)
     float des_vel = S_Curve_cal(&Go_Ctrl_Data[id], id);
     if (Go_State[id].State == PosControl) Go_Motor_Position_Control(0, Go_Ctrl_Data[id].des_pos, Go_Ctrl_Data[id].k_pos);
     else {
-        if (des_vel != Go_Ctrl_Data[id].des_vel) Go_Ctrl_Data[id].des_vel = des_vel;
-        Go_Motor_Speed_Control(id, Go_Ctrl_Data[id].des_vel, Go_Ctrl_Data[0].k_vel);
+//        if (des_vel != Go_Ctrl_Data[id].des_vel) Go_Ctrl_Data[id].des_vel = des_vel;
+        Go_Motor_Speed_Control(id, des_vel, Go_Ctrl_Data[0].k_vel);
     }
+}
+
+void Go_Update_data(uint8_t id)
+{
+    if (Go_State[id].State == AsCurveControl) return;
+    else{
+        int temp = idle_time;
+        Motor_Ctrl(id);
+        while (temp <= idle_time) continue;
+    }
+}
+
+void motor_ReadParam(int id)
+{
+    Flash_Data.t_data = (uint32_t)FLASH_Param[0];
+    Go_Ctrl_Data[id].k_vel = Flash_Data.s_data;
+    Flash_Data.t_data = (uint32_t)FLASH_Param[1];
+    Go_Ctrl_Data[id].k_pos = Flash_Data.s_data;
+    Flash_Data.t_data = (uint32_t)FLASH_Param[2];
+    Go_Ctrl_Data[id].J_a = Flash_Data.s_data;
+    Flash_Data.t_data = (uint32_t)FLASH_Param[3];
+    Go_Ctrl_Data[id].J_d = Flash_Data.s_data;
+    Flash_Data.t_data = (uint32_t)FLASH_Param[4];
+    Go_Ctrl_Data[id].A_a = Flash_Data.s_data;
+    Flash_Data.t_data = (uint32_t)FLASH_Param[5];
+    Go_Ctrl_Data[id].A_d = Flash_Data.s_data;
+    Flash_Data.t_data = (uint32_t)FLASH_Param[6];
+    Go_Ctrl_Data[id].V_m = Flash_Data.s_data;
+}
+
+void motorOn(uint8_t id)
+{
+    motor_ReadParam(id);
+    Go_Pos_PID_Init(id);
+    Go_Vel_PID_Init(id);
+    Go_State[id].State = VelControl;
+    Go_State[id].have_init = 0;
+    Go_Motor_Speed_Control(id, 0, 0);
+    while (!Go_State[id].have_init) continue;
+
 }

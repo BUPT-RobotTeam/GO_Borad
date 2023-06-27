@@ -26,8 +26,8 @@ void CAN1_Filter_Init(void)
     sFilterConfig.FilterBank = 0;
     sFilterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
     sFilterConfig.FilterScale = CAN_FILTERSCALE_32BIT;
-    sFilterConfig.FilterIdHigh = 0x0000;
-    sFilterConfig.FilterIdLow = 0x0000;
+    sFilterConfig.FilterIdHigh = 0x310;
+    sFilterConfig.FilterIdLow = 0x300;
     sFilterConfig.FilterMaskIdHigh = 0x0000;
     sFilterConfig.FilterMaskIdLow = 0x0000;
     sFilterConfig.FilterFIFOAssignment = CAN_RX_FIFO0;
@@ -57,15 +57,15 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
         uint32_t ID = Control_Message_Box.StdId;
         uint8_t run = 1;
         // cnt++;
-        if (ID == 0x201){
+        if (ID == 0x301){
             // speed control
             Go_Ctrl_Data[CAN_Decode_Box_u.control_message.ID].des_vel = CAN_Decode_Box_u.control_message.data;
             Go_State[CAN_Decode_Box_u.control_message.ID].State = VelControl;
-        }else if (ID == 0x202){
+        }else if (ID == 0x302){
             // position control
             Go_Ctrl_Data[CAN_Decode_Box_u.control_message.ID].des_pos = CAN_Decode_Box_u.control_message.data;
             Go_State[CAN_Decode_Box_u.control_message.ID].State = PosControl;
-        }else if (ID == 0x203){
+        }else if (ID == 0x303){
             // curve position control
             float des = CAN_Decode_Box_u.control_message.data + Go_Ctrl_Data[CAN_Decode_Box_u.control_message.ID].start_pos;
             if (fabsf(Go_Ctrl_Data[CAN_Decode_Box_u.control_message.ID].des_pos-des)>0.01f){

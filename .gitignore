@@ -1,2 +1,9 @@
 # 项目排除路径
 /cmake-build-debug/
+/.cproject
+/.mxproject
+/.osx.project
+/.project
+/CMakeLists_template.txt
+/STM32F405RGTX_FLASH.ld
+/STM32F405RGTX_RAM.ld
