@@ -4,6 +4,7 @@
 
 #ifndef GO_BOARD_USART_CMD_H
 #define GO_BOARD_USART_CMD_H
+#include "stdint.h"
 
 extern uint8_t interrupted;
 

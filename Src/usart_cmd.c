@@ -180,13 +180,49 @@ void CMD_Dealer(char cmd_buffer[], uint8_t data_length){
     }else if (!strcmp(cmd, "posctrl")){
         uint8_t id;
         float pos;
-        int ans = sscanf(cmd_buffer, "posctrl %d %f", &id, &pos);
+        int ans = sscanf(cmd_buffer,"posctrl %d %f", &id, &pos);
         if (ans < 2 || ans == EOF){
             Usart_Printf("Invalid args!\r\n");
         }else{
-            Usart_Printf(">>> %s\r\n",cmd_buffer);
+            Usart_Printf(">>>posctrl %d %f\r\n",id,pos);
             Go_State[id].State = PosControl;
             Go_Ctrl_Data[id].des_pos = pos + Go_Ctrl_Data[id].start_pos;
+//            Motor_Ctrl(id);
+        }
+    }else if (!strcmp(cmd, "pidposctrl")){
+        uint8_t id;
+        float pos;
+        int ans = sscanf(cmd_buffer,"pidposctrl %d %f", &id, &pos);
+        if (ans < 2 || ans == EOF){
+            Usart_Printf("Invalid args!\r\n");
+        }else{
+            Usart_Printf(">>>pidposctrl %d %f\r\n",id,pos);
+            Go_State[id].State = PIDPosControl;
+            Go_Ctrl_Data[id].des_pos = pos + Go_Ctrl_Data[id].start_pos;
+//            Motor_Ctrl(id);
+        }
+    }else if (!strcmp(cmd, "pidvelctrl")){
+        uint8_t id;
+        float vel;
+        int ans = sscanf(cmd_buffer,"pidvelctrl %d %f", &id, &vel);
+        if (ans < 2 || ans == EOF){
+            Usart_Printf("Invalid args!\r\n");
+        }else{
+            Usart_Printf(">>>pidvelctrl %d %f\r\n",id,vel);
+            Go_State[id].State = PIDVelControl;
+            Go_Ctrl_Data[id].des_vel = vel;
+//            Motor_Ctrl(id);
+        }
+    }else if (!strcmp(cmd, "sposctrl")){
+        uint8_t id;
+        float pos;
+        int ans = sscanf(cmd_buffer,"sposctrl %d %f", &id, &pos);
+        if (ans < 2 || ans == EOF){
+            Usart_Printf("Invalid args!\r\n");
+        }else{
+            Usart_Printf(">>>sposctrl %d %f\r\n",id,pos);
+            Go_State[id].State = SPosControl;
+            Go_Ctrl_Data[id].des_pos = pos;
 //            Motor_Ctrl(id);
         }
     }else if (!strcmp(cmd, "crvctrl")){

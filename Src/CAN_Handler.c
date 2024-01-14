@@ -60,11 +60,11 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
         if (ID == 0x301){
             // speed control
             Go_Ctrl_Data[CAN_Decode_Box_u.control_message.ID].des_vel = CAN_Decode_Box_u.control_message.data;
-            Go_State[CAN_Decode_Box_u.control_message.ID].State = VelControl;
+            Go_State[CAN_Decode_Box_u.control_message.ID].State = PIDVelControl;
         }else if (ID == 0x302){
             // position control
-            Go_Ctrl_Data[CAN_Decode_Box_u.control_message.ID].des_pos = CAN_Decode_Box_u.control_message.data;
-            Go_State[CAN_Decode_Box_u.control_message.ID].State = PosControl;
+            Go_Ctrl_Data[CAN_Decode_Box_u.control_message.ID].des_pos = CAN_Decode_Box_u.control_message.data + Go_Ctrl_Data[CAN_Decode_Box_u.control_message.ID].start_pos;
+            Go_State[CAN_Decode_Box_u.control_message.ID].State = PIDPosControl;
         }else if (ID == 0x303){
             // curve position control
             float des = CAN_Decode_Box_u.control_message.data + Go_Ctrl_Data[CAN_Decode_Box_u.control_message.ID].start_pos;

@@ -33,6 +33,9 @@ union CRCC{
     uint16_t crc;
 }CRC_u;
 
+struct S_Data P_sata;
+uint8_t s_First;
+
 void Go_Motor_Curve_Control(uint8_t id);
 float S_Curve_cal(Curve_Data *AS_Curve_Data, int id);
 
@@ -159,18 +162,27 @@ void Go_Encoder_Correction(uint8_t ID)
 
 void Go_Vel_PID_Control(uint8_t ID)
 {
-    float err = Go_Ctrl_Data[ID].des_vel - Go_State[ID].omega;
+    float err = Go_Ctrl_Data[ID].des_vel -  Go_State[ID].omega ;
     float output_torque = PID_Calculate(&Go_Vel_PID_Num[ID], err);
     Go_Motor_Torque_Control(ID, output_torque);
 }
 
 void Go_Pos_PID_Control(uint8_t ID)
 {
+    static int time;
+    time++;
     float err = Go_Ctrl_Data[ID].des_pos - Go_State[ID].pos;
     Go_Ctrl_Data[ID].des_vel = PID_Calculate(&Go_Pos_PID_Num[ID], err);
+    if(time % 400 == 0)
+        Usart_Printf("%f,%f\r\n",Go_Ctrl_Data[ID].des_pos,Go_State[ID].pos);
     Go_Vel_PID_Control(ID);
 }
 
+void Go_Pos_S_Control(uint8_t ID)
+{
+    float err = Go_Ctrl_Data[ID].des_pos - Go_State[ID].pos;
+
+}
 // Uart Receive part
 extern DMA_HandleTypeDef hdma_usart3_rx;
 uint8_t rx_data_box[2][SBUS_RX_BUF_NUM];
@@ -222,6 +234,7 @@ void Motor_Ctrl(uint8_t id){
     else if (Go_State[id].State == AsCurveControl) Go_Motor_Curve_Control(id);
     else if (Go_State[id].State == PIDVelControl) Go_Vel_PID_Control(id);
     else if (Go_State[id].State == PIDPosControl) Go_Pos_PID_Control(id);
+    else if (Go_State[id].State == SPosControl) Go_Pos_S_Control(id);
 }
 
 void Received_Data_Dealer(const uint8_t *sbus_buf)
@@ -308,8 +321,6 @@ void USART3_IRQHandler(void) {
                 Received_Data_Dealer(rx_data_box[1]);
             }
         }
-    }else{
-        HAL_UART_IRQHandler(&huart3);
     }
 }
 
@@ -510,6 +521,7 @@ float S_Curve_cal(Curve_Data *AS_Curve_Data, int id)
     return Next_Speed;
 }
 
+
 void Go_Motor_Curve_Control(uint8_t id)
 {
     float des_vel = S_Curve_cal(&Go_Ctrl_Data[id], id);
@@ -553,9 +565,9 @@ void motorOn(uint8_t id)
     motor_ReadParam(id);
     Go_Pos_PID_Init(id);
     Go_Vel_PID_Init(id);
-    Go_State[id].State = VelControl;
+    Go_State[id].State = PIDPosControl;
     Go_State[id].have_init = 0;
-    Go_Motor_Speed_Control(id, 0, 0);
+    Go_Pos_PID_Control(0);
     while (!Go_State[id].have_init) continue;
 
 }

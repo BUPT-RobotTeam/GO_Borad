@@ -113,6 +113,7 @@ int main(void)
 
     motorOn(0);
     Usart_Printf("Init Finished!\r\n");
+
   /* USER CODE END 2 */
 
   /* Infinite loop */

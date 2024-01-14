@@ -1,9 +1,37 @@
-# 项目排除路径
-/cmake-build-debug/
-/.cproject
-/.mxproject
-/.osx.project
-/.project
-/CMakeLists_template.txt
-/STM32F405RGTX_FLASH.ld
-/STM32F405RGTX_RAM.ld
+/cmake-build-debug
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+cmake-build*
+.idea
+.vscode
